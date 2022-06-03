@@ -6,17 +6,133 @@
 #include <GL/glut.h>
 
 #define pi (2*acos(0.0))
+#define move_distance 2
+#define rotate_angle 0.05
 
+struct point
+{
+	double x,y,z;
+
+	point(){
+		x=y=z=0;
+	}
+
+	point(double x,double y,double z){
+		this->x=x;
+		this->y=y;
+		this->z=z;
+	}
+};
+
+// Global Variables
 double cameraHeight;
 double cameraAngle;
 int drawgrid;
 int drawaxes;
 double angle;
 
-struct point
+point pos(100,100,0);
+point u(0,0,1);
+point r(-1/sqrt(2),1/sqrt(2),0);
+point l(-1/sqrt(2),-1/sqrt(2),0);
+
+// POINT ARITHMETICS
+point operator+(point a,point b){
+	return point(a.x+b.x,a.y+b.y,a.z+b.z);
+}
+
+point operator-(point a,point b){
+	return point(a.x-b.x,a.y-b.y,a.z-b.z);
+}
+
+point operator*(point a,double b){
+	return point(a.x*b,a.y*b,a.z*b);
+}
+
+
+
+// MOVE OPERATIONS
+
+void move_forward()
 {
-	double x,y,z;
-};
+	pos.x+=move_distance*l.x;
+	pos.y+=move_distance*l.y;
+	pos.z+=move_distance*l.z;
+}
+
+void move_backward()
+{
+	pos.x-=move_distance*l.x;
+	pos.y-=move_distance*l.y;
+	pos.z-=move_distance*l.z;
+}
+
+void move_right()
+{
+	pos.x+=move_distance*r.x;
+	pos.y+=move_distance*r.y;
+	pos.z+=move_distance*r.z;
+}
+
+void move_left()
+{
+	pos.x-=move_distance*r.x;
+	pos.y-=move_distance*r.y;
+	pos.z-=move_distance*r.z;
+}
+
+void move_up()
+{
+	pos.x+=move_distance*u.x;
+	pos.y+=move_distance*u.y;
+	pos.z+=move_distance*u.z;
+}
+
+void move_down()
+{
+	pos.x-=move_distance*u.x;
+	pos.y-=move_distance*u.y;
+	pos.z-=move_distance*u.z;
+}
+
+// ROTATE OPERATIONS
+
+
+void rotate_left()
+{
+	l = l*cos(rotate_angle) - r*sin(rotate_angle);
+	r = r*cos(rotate_angle) + l*sin(rotate_angle);
+}
+
+void rotate_right()
+{
+	l = l*cos(rotate_angle) - r*sin(rotate_angle);
+	r = r*cos(rotate_angle) + l*sin(rotate_angle);
+}
+
+void look_up()
+{
+	u = u*cos(rotate_angle) - l*sin(rotate_angle);
+	l = l*cos(rotate_angle) + u*sin(rotate_angle);
+}
+
+void look_down()
+{
+	u = u*cos(rotate_angle) - l*sin(rotate_angle);
+	l = l*cos(rotate_angle) + u*sin(rotate_angle);
+}
+
+void tilt_clockwise()
+{
+	r = r*cos(rotate_angle) - u*sin(rotate_angle);
+	u = u*cos(rotate_angle) + r*sin(rotate_angle);
+}
+
+void tilt_anticlockwise()
+{
+	r = r*cos(rotate_angle) - u*sin(rotate_angle);
+	u = u*cos(rotate_angle) + r*sin(rotate_angle);
+}
 
 
 void drawAxes()
@@ -169,39 +285,31 @@ void drawSphere(double radius,int slices,int stacks)
 
 void drawSS()
 {
-    glColor3f(1,0,0);
-    drawSquare(20);
-
-    glRotatef(angle,0,0,1);
-    glTranslatef(110,0,0);
-    glRotatef(2*angle,0,0,1);
-    glColor3f(0,1,0);
-    drawSquare(15);
-
-    glPushMatrix();
-    {
-        glRotatef(angle,0,0,1);
-        glTranslatef(60,0,0);
-        glRotatef(2*angle,0,0,1);
-        glColor3f(0,0,1);
-        drawSquare(10);
-    }
-    glPopMatrix();
-
-    glRotatef(3*angle,0,0,1);
-    glTranslatef(40,0,0);
-    glRotatef(4*angle,0,0,1);
     glColor3f(1,1,0);
-    drawSquare(5);
+	glutSolidSphere(20,20,20);
 }
 
 void keyboardListener(unsigned char key, int x,int y){
 	switch(key){
 
 		case '1':
-			drawgrid=1-drawgrid;
+			rotate_left();
 			break;
-
+		case '2':
+			rotate_right();
+			break;
+		case '3':
+			look_up();
+			break;
+		case '4':
+			look_down();
+			break;
+		case '5':
+			tilt_clockwise();
+			break;
+		case '6':
+			tilt_anticlockwise();
+			break;
 		default:
 			break;
 	}
@@ -211,22 +319,26 @@ void keyboardListener(unsigned char key, int x,int y){
 void specialKeyListener(int key, int x,int y){
 	switch(key){
 		case GLUT_KEY_DOWN:		//down arrow key
-			cameraHeight -= 3.0;
+			move_backward();
+			//printf("down arrow is pressed\n");
 			break;
 		case GLUT_KEY_UP:		// up arrow key
-			cameraHeight += 3.0;
+			move_forward();
+			//printf("up arrow is pressed\n");
 			break;
 
 		case GLUT_KEY_RIGHT:
-			cameraAngle += 0.03;
+			move_right();
 			break;
 		case GLUT_KEY_LEFT:
-			cameraAngle -= 0.03;
+			move_left();
 			break;
 
 		case GLUT_KEY_PAGE_UP:
+			move_up();
 			break;
 		case GLUT_KEY_PAGE_DOWN:
+			move_down();
 			break;
 
 		case GLUT_KEY_INSERT:
@@ -289,7 +401,8 @@ void display(){
 
 	//gluLookAt(100,100,100,	0,0,0,	0,0,1);
 	//gluLookAt(200*cos(cameraAngle), 200*sin(cameraAngle), cameraHeight,		0,0,0,		0,0,1);
-	gluLookAt(0,0,200,	0,0,0,	0,1,0);
+	
+	gluLookAt(pos.x, pos.y, pos.z, pos.x+l.x, pos.y+l.y, pos.z+l.z, u.x, u.y, u.z);
 
 
 	//again select MODEL-VIEW
@@ -304,8 +417,8 @@ void display(){
 	drawAxes();
 	drawGrid();
 
-    //glColor3f(1,0,0);
-    //drawSquare(10);
+    // glColor3f(1,0,0);
+    // drawSquare(10);
 
     drawSS();
 
@@ -313,7 +426,7 @@ void display(){
 
     //drawCone(20,50,24);
 
-	//drawSphere(30,24,20);
+	// drawSphere(30,24,20);
 
 
 
