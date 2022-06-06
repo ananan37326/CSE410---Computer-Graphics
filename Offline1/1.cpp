@@ -33,12 +33,13 @@ int drawgrid;
 int drawaxes;
 double angle;
 
-double arm_length = 25;
-double max_length = 25;
-double sphere_radius = max_length - arm_length;
+
+double arm_length = 25; // arm length of the cube
+double max_length = 25; // maximum length allowed
 double total_slices = 24;
 double total_stacks = 20;
 
+// Initial value for the vectors
 point pos(100, 100, 0);
 point u(0, 0, 1);
 point r(-1 / sqrt(2), 1 / sqrt(2), 0);
@@ -84,7 +85,6 @@ void move_right()
 	// pos.y += move_distance * r.y;
 	// pos.z += move_distance * r.z;
 	pos = pos + r * move_distance;
-	printf("%f %f %f\n", pos.x, pos.y, pos.z);
 }
 
 void move_left()
@@ -93,7 +93,6 @@ void move_left()
 	// pos.y -= move_distance * r.y;
 	// pos.z -= move_distance * r.z;
 	pos = pos - r * move_distance;
-	printf("%f %f %f\n", pos.x, pos.y, pos.z);
 }
 
 void move_up()
@@ -150,6 +149,8 @@ void tilt_anticlockwise()
 	u = u * cos(-rotate_angle) + r * sin(-rotate_angle);
 }
 
+// DRAW OPERATIONS
+
 void drawAxes()
 {
 	if (drawaxes == 1)
@@ -197,6 +198,7 @@ void drawGrid()
 	}
 }
 
+
 void drawSquare(double a)
 {
 	glColor3f(0,255,0.0);
@@ -232,7 +234,7 @@ void drawOneEighthSphere(double radius, int slices, int stacks)
 	for (i = 0; i < stacks; i++)
 	{
 		// glColor3f((double)i/(double)stacks,(double)i/(double)stacks,(double)i/(double)stacks);
-		glColor3f(255, 0, 0);
+		glColor3f(255, 0, 0); // red color for the sphere
 		for (j = 0; j < slices; j++)
 		{
 			glBegin(GL_QUADS);
@@ -271,7 +273,7 @@ void drawOneFourthCylinder(double radius, double height, int slices, int stacks)
 	for (i = 0; i < stacks; i++)
 	{
 		//glColor3f((double)5*i/(double)stacks,(double)2*i/(double)stacks,(double)3*i/(double)stacks);
-		glColor3f(0, 0, 255);
+		glColor3f(0, 0, 255); // blue color for the cylinder
 		for (j = 0; j < slices; j++)
 		{
 			glBegin(GL_QUADS);
@@ -335,30 +337,31 @@ void drawCube()
 	glPopMatrix();
 }
 
+// The radius of the sphere should be max_length - arm_length as it will cover the gaps created by the cube
 void drawHalfSphere()
 {
 	glPushMatrix();
 	glTranslatef(arm_length, arm_length, arm_length);
 	glRotatef(0, 0, 0, 1);
-	drawOneEighthSphere(max_length-arm_length, total_slices, total_stacks);
+	drawOneEighthSphere(max_length - arm_length, total_slices, total_stacks);
 	glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(arm_length, -arm_length, arm_length);
 	glRotatef(-90, 0, 0, 1);
-	drawOneEighthSphere(max_length-arm_length, total_slices, total_stacks);
+	drawOneEighthSphere(max_length - arm_length, total_slices, total_stacks);
 	glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(-arm_length, arm_length, arm_length);
 	glRotatef(90, 0, 0, 1);
-	drawOneEighthSphere(max_length-arm_length, total_slices, total_stacks);
+	drawOneEighthSphere(max_length - arm_length, total_slices, total_stacks);
 	glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(-arm_length, -arm_length, arm_length);
 	glRotatef(180, 0, 0, 1);
-	drawOneEighthSphere(max_length-arm_length, total_slices, total_stacks);
+	drawOneEighthSphere(max_length - arm_length, total_slices, total_stacks);
 	glPopMatrix();
 }
 
@@ -374,6 +377,8 @@ void drawFullSphere()
 	glPopMatrix();
 }
 
+
+// The radius of the cylinder is the same as the radius of the sphere, and the height is the same as the length of the cube
 void drawFullCylinder()
 {
 	// VERTICAL 
@@ -478,11 +483,6 @@ void drawFullCylinder()
 }
 
 
-void drawSS()
-{
-	glColor3f(1, 1, 0);
-	glutSolidSphere(20, 20, 20);
-}
 
 void keyboardListener(unsigned char key, int x, int y)
 {
@@ -625,6 +625,7 @@ void display()
 	drawAxes();
 	drawGrid();
 
+	// Drawing the cube, sphere and cylinder
 	drawCube();
 	drawFullSphere();
 	drawFullCylinder();
@@ -676,7 +677,7 @@ int main(int argc, char **argv)
 	glutInitWindowPosition(0, 0);
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGB); // Depth, Double buffer, RGB color
 
-	glutCreateWindow("My OpenGL Program");
+	glutCreateWindow("1705053_Task1_and_Task2");
 
 	init();
 
