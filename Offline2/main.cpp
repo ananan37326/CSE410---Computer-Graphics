@@ -9,6 +9,42 @@ double fov;
 double aspectRatio;
 double nearPlane, farPlane;
 
+#define pi (2 * acos(0.0))
+
+// Struct for representing a point in 3D space
+struct point
+{
+	double x, y, z;
+
+	point()
+	{
+		x = y = z = 0;
+	}
+
+	point(double x, double y, double z)
+	{
+		this->x = x;
+		this->y = y;
+		this->z = z;
+	}
+};
+
+// POINT ARITHMETICS
+point operator+(point a, point b)
+{
+	return point(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+point operator-(point a, point b)
+{
+	return point(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+point operator*(point a, double b)
+{
+	return point(a.x * b, a.y * b, a.z * b);
+}
+
 void getSceneInfo(){
     ifstream fin("scene.txt");
     if (!fin) {
