@@ -31,17 +31,28 @@ struct matrix
             for(int j = 0; j < 4; j++)
                 mat[i][j] = 0;
     }
-
     
 };
 
+// gluLookAt variables
+point eye, look, up;
 double eyeX, eyeY, eyeZ;
 double lookX, lookY, lookZ;
 double upX, upY, upZ;
+
+// gluPerspective variables
 double fov;
 double aspectRatio;
 double nearPlane, farPlane;
-point eye, look, up;
+
+//Screen variables
+double screenWidth, screenHeight;
+double left, right, top, bottom, front, rear;
+
+// zBuffer variables
+double dx, dy, 
+
+
 
 
 // POINT ARITHMETICS
@@ -60,6 +71,19 @@ point operator*(point a, double b)
 	return point(a.x * b, a.y * b, a.z * b);
 }
 
+point normalize(point a)
+{
+    double len = sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    return point(a.x / len, a.y / len, a.z / len);
+}
+
+point scale(point a, double w)
+{
+    return point(a.x / w, a.y / w, a.z / w);
+}
+
+
+// VECTOR ARITHMETICS
 double dot(point a, point b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -68,6 +92,76 @@ double dot(point a, point b)
 point cross(point a, point b)
 {
     return point(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
+point rodrigues(point x, point a, double angle)
+{
+    return x*cos(angle*pi/180) +  a*dot(a,x)*(1-cos(angle*pi/180)) + cross(a,x)*sin(angle*pi/180);
+}
+
+// MATRIX METHODS
+matrix matmul(matrix a, matrix b)
+{
+    matrix c;
+    for(int i = 0; i < 4; i++)
+        for(int j = 0; j < 4; j++)
+            for(int k = 0; k < 4; k++)
+                c.mat[i][j] += a.mat[i][k] * b.mat[k][j];
+    return c;
+}
+
+matrix getIdentityMatrix()
+{
+    matrix c;
+    for(int i=0; i<4;i++)
+    {
+        c.mat[i][i] = 1;
+    }
+    return c;
+}
+
+matrix getTranslationMatrix(double tx, double ty, double tz)
+{
+    matrix c = getIdentityMatrix();
+    c.mat[0][3] = tx;
+    c.mat[1][3] = ty;
+    c.mat[2][3] = tz;
+    return c;
+}
+
+matrix getScalingMatrix(double sx, double sy, double sz)
+{
+    matrix c = getIdentityMatrix();
+    c.mat[0][0] = sx;
+    c.mat[1][1] = sy;
+    c.mat[2][2] = sz;
+    return c;
+}
+
+matrix getRotationMatrix(double angle, double ax, double ay, double az)
+{
+    point i(1,0,0);
+    point j(0,1,0);
+    point k(0,0,1);
+    point a = normalize(point(ax,ay,az));
+
+    matrix c = getIdentityMatrix();
+
+    point c1 = rodrigues(i,a,angle);
+    point c2 = rodrigues(j,a,angle);
+    point c3 = rodrigues(k,a,angle);
+
+    c.mat[0][0] = c1.x;
+    c.mat[0][1] = c2.x;
+    c.mat[0][2] = c3.x;
+    c.mat[1][0] = c1.y;
+    c.mat[1][1] = c2.y;
+    c.mat[1][2] = c3.y;
+    c.mat[2][0] = c1.z;
+    c.mat[2][1] = c2.z;
+    c.mat[2][2] = c3.z;
+
+    return c;
 }
 
 void modelingTransformation()
@@ -128,7 +222,8 @@ void printParams(){
 int main(){
 
     getSceneInfo();
-    printParams();
+    //printParams();
+    
 
     return 0;
 }
