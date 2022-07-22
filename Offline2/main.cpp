@@ -1,11 +1,4 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <cmath>
-#include <iomanip>
-#include <fstream>
-#include <stack>
+#include<bits/stdc++.h>
 
 #define pi (2 * acos(0.0))
 
@@ -31,11 +24,11 @@ struct point
 
 struct matrix
 {
-    int nRows=4, nCols=4;
+    int nRows = 4, nCols = 4;
     double **mat;
     matrix()
     {
-        mat = new double*[nRows];
+        mat = new double *[nRows];
         for (int i = 0; i < nRows; i++)
         {
             mat[i] = new double[nCols];
@@ -53,7 +46,7 @@ struct matrix
     {
         this->nRows = nRows;
         this->nCols = nCols;
-        mat = new double*[nRows];
+        mat = new double *[nRows];
         for (int i = 0; i < nRows; i++)
         {
             mat[i] = new double[nCols];
@@ -66,16 +59,34 @@ struct matrix
             }
         }
     }
+};
 
+struct color
+{
+    double r, g, b;
+
+    color()
+    {
+        r = g = b = 0;
+    }
+
+    color(double r, double g, double b)
+    {
+        this->r = r;
+        this->g = g;
+        this->b = b;
+    }
 };
 
 struct triangle
 {
-    point a,b,c;
+    point a, b, c;
+    color tColor;
 
     triangle()
     {
-        a = b = c = point(0,0,0);    
+        a = b = c = point(0, 0, 0);
+        tColor = color(255, 255, 255);
     }
 
     triangle(point a, point b, point c)
@@ -83,15 +94,19 @@ struct triangle
         this->a = a;
         this->b = b;
         this->c = c;
+        tColor = color(255, 255, 255);
     }
+
 };
 
-ifstream fin;
+ifstream fin, fConfig, fStage;
 ofstream stage1, stage2, stage3, z_buffer;
 
 stack<matrix> S;
 stack<stack<matrix>> states;
-matrix viewMatrix(4,4), projectionMatrix(4,4);
+matrix viewMatrix(4, 4), projectionMatrix(4, 4);
+int triangleCount = 0;
+vector<triangle> triangles;
 
 // gluLookAt variables
 point eye, look, up;
@@ -106,10 +121,12 @@ double near, far;
 
 // Screen variables
 double screenWidth, screenHeight;
-double left, right, top, bottom, front, rear;
+double leftLimitX, rightLimitX, bottomLimitY, topLimitY, frontLimitZ, rearLimitZ;
+
 
 // zBuffer variables
-double dx, dy;
+double **zBuffer;
+color **frameBuffer;
 
 // POINT ARITHMETICS
 point operator+(point a, point b)
@@ -160,10 +177,9 @@ point rodrigues(point x, point a, double angle)
 point scaleW(matrix m)
 {
     double w = m.mat[m.nRows - 1][m.nCols - 1];
-    //cout << "W: " << w << endl;
+    // cout << "W: " << w << endl;
     return point(m.mat[0][0] / w, m.mat[1][0] / w, m.mat[2][0] / w);
 }
-
 
 // MATRIX METHODS
 matrix matmul(matrix a, matrix b)
@@ -178,18 +194,17 @@ matrix matmul(matrix a, matrix b)
 
 matrix pointToMatrix(point a)
 {
-    matrix c(4,1);
+    matrix c(4, 1);
     c.mat[0][0] = a.x;
     c.mat[1][0] = a.y;
     c.mat[2][0] = a.z;
     c.mat[3][0] = 1;
     return c;
-
 }
 
 matrix getIdentityMatrix()
 {
-    matrix c(4,4);
+    matrix c(4, 4);
     for (int i = 0; i < c.nRows; i++)
     {
         c.mat[i][i] = 1;
@@ -221,7 +236,7 @@ matrix getRotationMatrix(double angle, double ax, double ay, double az)
     point j(0, 1, 0);
     point k(0, 0, 1);
     point a = normalize(point(ax, ay, az));
-    //cout << "a: " << a.x << " " << a.y << " " << a.z << endl;
+    // cout << "a: " << a.x << " " << a.y << " " << a.z << endl;
 
     matrix c = getIdentityMatrix();
 
@@ -270,9 +285,8 @@ matrix getViewMatrix()
 matrix getProjectionMatrix()
 {
     double fovX = fovY * aspectRatio;
-    double t = near * tan(fovY  * pi / (180.0*2));
-    double r = near * tan(fovX *  pi / (180.0*2));
-    
+    double t = near * tan(fovY * pi / (180.0 * 2));
+    double r = near * tan(fovX * pi / (180.0 * 2));
 
     matrix c = getIdentityMatrix();
 
@@ -283,8 +297,21 @@ matrix getProjectionMatrix()
     c.mat[3][2] = -1;
     c.mat[3][3] = 0;
 
-
     return c;
+}
+
+void printParams()
+{
+    cout << "Eye: " << eyeX << " " << eyeY << " " << eyeZ << endl;
+    cout << "Look: " << lookX << " " << lookY << " " << lookZ << endl;
+    cout << "Up: " << upX << " " << upY << " " << upZ << endl;
+    cout << "FOV: " << fovY << endl;
+    cout << "Aspect Ratio: " << aspectRatio << endl;
+    cout << "Near Plane: " << near << endl;
+    cout << "Far Plane: " << far << endl;
+    cout << "Eye: " << eye.x << " " << eye.y << " " << eye.z << endl;
+    cout << "Look: " << look.x << " " << look.y << " " << look.z << endl;
+    cout << "Up: " << up.x << " " << up.y << " " << up.z << endl;
 }
 
 void printTriangle(triangle t)
@@ -293,6 +320,16 @@ void printTriangle(triangle t)
     cout << "A: " << t.a.x << " " << t.a.y << " " << t.a.z << endl;
     cout << "B: " << t.b.x << " " << t.b.y << " " << t.b.z << endl;
     cout << "C: " << t.c.x << " " << t.c.y << " " << t.c.z << endl;
+    cout << endl;
+}
+
+void printAllTriangles()
+{
+    for (int i = 0; i < triangles.size(); i++)
+    {
+        cout << "Triangle " << i << ": " << endl;
+        printTriangle(triangles[i]);
+    }
 }
 
 void printMatrix(matrix m)
@@ -309,102 +346,67 @@ void printMatrix(matrix m)
     cout << endl;
 }
 
-void executeStages()
+// GENERAL METHODS - FILE
+void openSceneFile()
 {
-    string command;
-    matrix c = getIdentityMatrix();
-    S.push(c);
-    while(true)
+    fin.open("scene.txt");
+    if (!fin)
     {
-        fin >> command;
-
-        if (command=="triangle")
-        {
-            point a, b, c;
-            fin >> a.x >> a.y >> a.z;
-            fin >> b.x >> b.y >> b.z;
-            fin >> c.x >> c.y >> c.z;
-            triangle t(a, b, c);
-            
-            
-            // Transform the triangle for stage1
-            t.a = scaleW(matmul(S.top(), pointToMatrix(t.a)));
-            //cout << "A: " << t.a.x << " " << t.a.y << " " << t.a.z << endl;
-            t.b = scaleW(matmul(S.top(), pointToMatrix(t.b)));
-            t.c = scaleW(matmul(S.top(), pointToMatrix(t.c)));
-
-            stage1 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
-            stage1 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
-            stage1 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
-            stage1 << endl;
-
-            // Stage2
-            t.a = scaleW(matmul(viewMatrix, pointToMatrix(t.a)));
-            t.b = scaleW(matmul(viewMatrix, pointToMatrix(t.b)));
-            t.c = scaleW(matmul(viewMatrix, pointToMatrix(t.c)));
-
-            stage2 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
-            stage2 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
-            stage2 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
-            stage2 << endl;
-
-            cout << fixed << setprecision(7);
-            cout << "A: " << t.a.x << " " << t.a.y << " " << t.a.z << endl;
-            cout << "B: " << t.b.x << " " << t.b.y << " " << t.b.z << endl;
-            cout << "C: " << t.c.x << " " << t.c.y << " " << t.c.z << endl;
-
-            // Stage3
-            t.a = scaleW(matmul(projectionMatrix, pointToMatrix(t.a)));
-            t.b = scaleW(matmul(projectionMatrix, pointToMatrix(t.b)));
-            t.c = scaleW(matmul(projectionMatrix, pointToMatrix(t.c)));
-
-            stage3 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
-            stage3 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
-            stage3 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
-            stage3 << endl;
-
-        }
-        else if (command=="translate")
-        {
-            double tx, ty, tz;
-            fin >> tx >> ty >> tz;
-            S.push(matmul(S.top(),getTranslationMatrix(tx, ty, tz)));
-
-        }
-        else if (command=="scale")
-        {
-            double sx, sy, sz;
-            fin >> sx >> sy >> sz;
-            S.push(matmul(S.top(),getScaleMatrix(sx, sy, sz)));
-        }
-        else if (command=="rotate")
-        {
-            double angle, ax, ay, az;
-            fin >> angle >> ax >> ay >> az;
-            matrix rot = getRotationMatrix(angle, ax, ay, az);
-            S.push(matmul(S.top(), rot));
-
-        }
-        else if (command=="push")
-        {
-            states.push(S);
-        }
-        else if (command=="pop")
-        {
-            S = states.top();
-            states.pop();
-
-        }
-        else if (command=="end")
-        {
-            break;
-        }
-
+        cout << "Error opening file" << endl;
+        exit(1);
     }
 }
 
+void openOutputFiles()
+{
+    stage1.open("stage1.txt");
+    stage2.open("stage2.txt");
+    stage3.open("stage3.txt");
+    z_buffer.open("z-buffer.txt");
+
+    stage1 << fixed << setprecision(7);
+    stage2 << fixed << setprecision(7);
+    stage3 << fixed << setprecision(7);
+    z_buffer << fixed << setprecision(7);
+}
+
+void openConfigFile()
+{
+    fConfig.open("config.txt");
+    if (!fConfig)
+    {
+        cout << "Error opening config file" << endl;
+        exit(1);
+    }
+}
+
+void closeSceneAndStageFiles()
+{
+    fin.close();
+    stage1.close();
+    stage2.close();
+    stage3.close();
+}
+
+void openStageFile()
+{
+    fStage.open("stage3.txt");
+    if (!fStage)
+    {
+        cout << "Error opening file" << endl;
+        exit(1);
+    }
+}
+
+void closeZBufferFiles()
+{
+    z_buffer.close();
+    fConfig.close();
+    fStage.close();
+}
 
 
+// MODELING, VIEW, PROJECTION TRANSFORMATION
 void initializegluLookAtParams()
 {
     eye = point(eyeX, eyeY, eyeZ);
@@ -426,49 +428,140 @@ void getSceneInfo()
     printMatrix(projectionMatrix);
 }
 
-void printParams()
+void executeStages()
 {
-    cout << "Eye: " << eyeX << " " << eyeY << " " << eyeZ << endl;
-    cout << "Look: " << lookX << " " << lookY << " " << lookZ << endl;
-    cout << "Up: " << upX << " " << upY << " " << upZ << endl;
-    cout << "FOV: " << fovY << endl;
-    cout << "Aspect Ratio: " << aspectRatio << endl;
-    cout << "Near Plane: " << near << endl;
-    cout << "Far Plane: " << far << endl;
-    cout << "Eye: " << eye.x << " " << eye.y << " " << eye.z << endl;
-    cout << "Look: " << look.x << " " << look.y << " " << look.z << endl;
-    cout << "Up: " << up.x << " " << up.y << " " << up.z << endl;
+    string command;
+    matrix c = getIdentityMatrix();
+    S.push(c);
+    while (true)
+    {
+        fin >> command;
+
+        if (command == "triangle")
+        {
+            triangleCount++;
+            point a, b, c;
+            fin >> a.x >> a.y >> a.z;
+            fin >> b.x >> b.y >> b.z;
+            fin >> c.x >> c.y >> c.z;
+            triangle t(a, b, c);
+
+            // Transform the triangle for stage1
+            t.a = scaleW(matmul(S.top(), pointToMatrix(t.a)));
+            // cout << "A: " << t.a.x << " " << t.a.y << " " << t.a.z << endl;
+            t.b = scaleW(matmul(S.top(), pointToMatrix(t.b)));
+            t.c = scaleW(matmul(S.top(), pointToMatrix(t.c)));
+
+            stage1 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
+            stage1 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
+            stage1 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
+            stage1 << endl;
+
+            // Stage2
+            t.a = scaleW(matmul(viewMatrix, pointToMatrix(t.a)));
+            t.b = scaleW(matmul(viewMatrix, pointToMatrix(t.b)));
+            t.c = scaleW(matmul(viewMatrix, pointToMatrix(t.c)));
+
+            stage2 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
+            stage2 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
+            stage2 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
+            stage2 << endl;
+
+            // Stage3
+            t.a = scaleW(matmul(projectionMatrix, pointToMatrix(t.a)));
+            t.b = scaleW(matmul(projectionMatrix, pointToMatrix(t.b)));
+            t.c = scaleW(matmul(projectionMatrix, pointToMatrix(t.c)));
+
+            stage3 << t.a.x << " " << t.a.y << " " << t.a.z << endl;
+            stage3 << t.b.x << " " << t.b.y << " " << t.b.z << endl;
+            stage3 << t.c.x << " " << t.c.y << " " << t.c.z << endl;
+            stage3 << endl;
+        }
+        else if (command == "translate")
+        {
+            double tx, ty, tz;
+            fin >> tx >> ty >> tz;
+            S.push(matmul(S.top(), getTranslationMatrix(tx, ty, tz)));
+        }
+        else if (command == "scale")
+        {
+            double sx, sy, sz;
+            fin >> sx >> sy >> sz;
+            S.push(matmul(S.top(), getScaleMatrix(sx, sy, sz)));
+        }
+        else if (command == "rotate")
+        {
+            double angle, ax, ay, az;
+            fin >> angle >> ax >> ay >> az;
+            matrix rot = getRotationMatrix(angle, ax, ay, az);
+            S.push(matmul(S.top(), rot));
+        }
+        else if (command == "push")
+        {
+            states.push(S);
+        }
+        else if (command == "pop")
+        {
+            S = states.top();
+            states.pop();
+        }
+        else if (command == "end")
+        {
+            break;
+        }
+    }
+}
+
+// ZBUFFER METHODS
+void getConfigInfo()
+{
+    fConfig >> screenWidth >> screenHeight;
+    fConfig >> leftLimitX;
+    fConfig >> bottomLimitY;
+    fConfig >> frontLimitZ >> rearLimitZ;
+
+    rightLimitX = -leftLimitX;
+    topLimitY = -bottomLimitY;
+}
+
+void getTriangles()
+{
+    srand(time(NULL));
+
+    for(int i=0;i<triangleCount;i++)
+    {
+        triangle t;
+        fStage >> t.a.x >> t.a.y >> t.a.z;
+        fStage >> t.b.x >> t.b.y >> t.b.z;
+        fStage >> t.c.x >> t.c.y >> t.c.z;
+
+        // SET RANDOM COLOR
+        t.tColor.r = rand() % 255;
+        t.tColor.g = rand() % 255;
+        t.tColor.b = rand() % 255;
+
+        triangles.push_back(t);
+
+    }
 }
 
 
 
 int main()
 {
-    fin.open("scene.txt");
-    if (!fin)
-    {
-        cout << "Error opening file" << endl;
-        exit(1);
-    }
-
-    stage1.open("stage1.txt");
-    stage2.open("stage2.txt");
-    stage3.open("stage3.txt");
-    z_buffer.open("z-buffer.txt");
-
-    stage1 << fixed << setprecision(7);
-    stage2 << fixed << setprecision(7);
-    stage3 << fixed << setprecision(7);
-    z_buffer << fixed << setprecision(7);
-
+    openSceneFile();
     getSceneInfo();
-    // printParams();
     executeStages();
+    closeSceneAndStageFiles();
 
-    fin.close();
-    stage1.close();
-    stage2.close();
-    stage3.close();
-    z_buffer.close();
+    openConfigFile();
+    openStageFile();
+    getConfigInfo();
+    getTriangles();
+    printAllTriangles();
+
+    closeZBufferFiles();
+    
+
     return 0;
 }
