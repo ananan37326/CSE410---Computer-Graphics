@@ -597,7 +597,7 @@ void applyProcedure()
         // finding left and right intersecting columns
         for (int row = topScanline; row <= bottomScanline; row++)
         {
-            double y_scan = yTop - row * dy;
+            double ys = yTop - row * dy;
             int leftIntersectingColumn, rightIntersectingColumn;
 
             point intersectPoints[3];
@@ -627,14 +627,14 @@ void applyProcedure()
                 }
                 if (p1.y != p2.y)
                 {
-                    double x_scan = p1.x + (y_scan - p1.y) * (p1.x - p2.x) / (p1.y - p2.y);
-                    if (x_scan > max(p1.x, p2.x) || x_scan < min(p1.x, p2.x) || y_scan > max(p1.y, p2.y) || y_scan < min(p1.y, p2.y))
+                    double xs = p1.x + (ys - p1.y) * (p1.x - p2.x) / (p1.y - p2.y);
+                    if (xs > max(p1.x, p2.x) || xs < min(p1.x, p2.x) || ys > max(p1.y, p2.y) || ys < min(p1.y, p2.y))
                     {
                         continue;
                     }
                     else
                     {
-                        intersectPoints[i].x = x_scan;
+                        intersectPoints[i].x = xs;
                     }
                 }
             }
@@ -709,7 +709,7 @@ void applyProcedure()
                 p2 = thisTriangle.a;
             }
 
-            za = p1.z + (y_scan - p1.y) * (p2.z - p1.z) / (p2.y - p1.y);
+            za = p1.z + (ys - p1.y) * (p2.z - p1.z) / (p2.y - p1.y);
 
             if (maxIdx == 0)
             {
@@ -727,7 +727,7 @@ void applyProcedure()
                 p2 = thisTriangle.a;
             }
 
-            zb = p1.z + (y_scan - p1.y) * (p2.z - p1.z) / (p2.y - p1.y);
+            zb = p1.z + (ys - p1.y) * (p2.z - p1.z) / (p2.y - p1.y);
 
             double constVal = dx * (zb - za) / (intersectPoints[maxIdx].x - intersectPoints[minIdx].x);
 
