@@ -380,7 +380,7 @@ void openOutputFiles()
 
 void openConfigFile()
 {
-    fConfig.open("config.txt");
+    fConfig.open("config2.txt");
     if (!fConfig)
     {
         cout << "Error opening config file" << endl;
@@ -591,7 +591,7 @@ void applyProcedure()
         double maxY = max(thisTriangle.a.y, max(thisTriangle.b.y, thisTriangle.c.y));
         double minY = min(thisTriangle.a.y, min(thisTriangle.b.y, thisTriangle.c.y));
 
-        topScanline = (maxY >= yTop) ? 0 : (int)((yTop - maxY) / dy);
+        topScanline = (maxY >= yTop) ? 0 : (int)round((yTop - maxY) / dy);
         bottomScanline = (minY <= yBottom) ? (screenHeight - 1) : (screenHeight - (1 + (int)round((minY - yBottom) / dy)));
 
         // finding left and right intersecting columns
@@ -807,7 +807,6 @@ int main()
     openStageFile();
     getConfigInfo();
     getTriangles();
-    printAllTriangles();
     initializeBuffers();
     applyProcedure();
     drawImage();
