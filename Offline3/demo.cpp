@@ -3,7 +3,7 @@
 #include <math.h>
 
 #include <windows.h>
-#include "1705053_Header.hpp"
+#include "1705053_classes.hpp"
 #include "bitmap_image.hpp"
 
 #define pi (2 * acos(0.0))
@@ -49,7 +49,7 @@ vector<SpotLight> spotLights;
 Vector3D origin(-floorWidth / 2, -floorWidth / 2, 0);
 
 // Initial value for the vectors
-Vector3D eye(50.2795,63.396,129.66);
+Vector3D eye(100, 100, 0);
 Vector3D u(0, 0, 1);
 Vector3D r(-1 / sqrt(2), 1 / sqrt(2), 0);
 Vector3D l(-1 / sqrt(2), -1 / sqrt(2), 0);
@@ -176,12 +176,9 @@ void capture()
 			color pixelColor(0, 0, 0);
 			color dummyColor(0, 0, 0);
 
-
 			for (int k = 0; k < objects.size(); k++)
 			{
-				//cout << "Object " << k << endl;
 				t = objects[k]->intersect(rayCast, dummyColor, 0);
-				//cout << "t = " << t << endl;
 
 				if (t > 0 && t < tMin)
 				{
@@ -194,15 +191,11 @@ void capture()
 				//cout << "i = " << i << " j = " << j << endl;
 				//cout << "nearest = " << nearest << endl;
 				tMin = objects[nearest]->intersect(rayCast, pixelColor, 1);
-				//cout << "t = " << t << endl;
 				pixelColor = pixelColor * 255.0;
 				image.set_pixel(i, j, pixelColor.r, pixelColor.g, pixelColor.b);
 			}
-
 		}
-		//cout << "Image captured" << endl;
 	}
-	
 	imageCount++;
 	image.save_image("image"+to_string(imageCount)+".bmp");
 	cout << "image" + to_string(imageCount) + ".bmp" << " captured from eye: (" << eye.x << "," << eye.y << "," << eye.z << ")" << endl;
@@ -283,11 +276,6 @@ void drawLights()
 	for (int i = 0; i < pointLights.size(); i++)
 	{
 		pointLights[i].draw();
-	}
-
-	for (int i=0; i<spotLights.size(); i++)
-	{
-		spotLights[i].draw();
 	}
 }
 

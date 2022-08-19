@@ -2,8 +2,23 @@
 #include <GL/glut.h>
 
 #define pi (2 * acos(0.0))
+#define AMBIENT 0
+#define DIFFUSE 1
+#define SPECULAR 2
+#define REFLECTION 3
 
 using namespace std;
+
+class Object;
+class Vector3D;
+class PointLight;
+class SpotLight;
+
+extern vector<Object *> objects;       // from main file
+extern Vector3D eye;                   // from main file
+extern int recursionLevel;             // from main file
+extern vector<PointLight> pointLights; // from main file
+extern vector<SpotLight> spotLights;   // from main file
 
 // struct for denoting a point in 3D space
 struct Vector3D
@@ -145,8 +160,6 @@ public:
     }
 };
 
-extern vector<PointLight> pointLights; // from main file
-
 class SpotLight
 {
 public:
@@ -166,6 +179,16 @@ public:
         this->point_light = point_light;
         this->light_direction = light_direction;
         this->cutoff_angle = cutoff_angle;
+    }
+
+    void draw()
+    {
+        glPointSize(7);
+        glBegin(GL_POINTS);
+        glColor3f(point_light.light_color.r, point_light.light_color.g, point_light.light_color.b);
+        glVertex3f(point_light.light_pos.x, point_light.light_pos.y, point_light.light_pos.z);
+        glEnd();
+        glPointSize(1);
     }
 };
 
@@ -229,12 +252,15 @@ public:
 
     virtual void draw()
     {
-        
     }
 
-    virtual double intersect(Ray ray, color &color, int level)
+    virtual double getIntersectingPoint(Ray ray, color &color, int level)
     {
         return -1.0;
+    }
+
+    virtual Vector3D getNormal(Vector3D point)
+    {
     }
 
     void setColor(color c)
@@ -255,15 +281,154 @@ public:
         coEfficients[3] = reflection;
     }
 
-    virtual ~Object()
+    virtual double intersect(Ray ray, color &outputColor, int level)
     {
-        cout << "Destroying an object" << endl;
+        double tMin = getIntersectingPoint(ray, outputColor, level);
+
+        if (level == 0)
+        {
+            return tMin;
+        }
+
+        // cout << "here" << endl;
+
+        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
+        Vector3D normal = getNormal(intersectionPoint);
+        // if (distance(eye, this->reference_point) > this->length)
+        // {
+        //     normal = normal * -1.0;
+        // }
+
+        // ambient
+        outputColor = this->c * this->coEfficients[0];
+        outputColor.clip();
+
+        if(dot(ray.dir, normal) > 0)
+        {
+            //cout << "here" << endl;
+            normal = normal * -1.0;
+        }
+
+        // diffuse and specular
+        for (int i = 0; i < pointLights.size(); i++)
+        {
+            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
+            double t, tMinShadow = INFINITY;
+            for (int j = 0; j < objects.size(); j++)
+            {
+                color blackDummy(0, 0, 0);
+                t = objects[j]->intersect(rayL, blackDummy, 0);
+                if (t > 0 && t < tMinShadow)
+                {
+                    tMinShadow = t;
+                }
+            }
+
+            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
+            double tuningMargin = 0.00001;
+            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
+            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
+
+            if (distIncidentIntersection > distIncidentShadow)
+            {
+                // cout << "herer" << endl;
+                continue;
+            }
+
+            double lambertValue = max(dot((rayL.dir), normal*-1.0), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * dot((rayL.dir), normal));
+            double phongValue = max(dot(rayL.dir, rayR.dir*-1.0), 0.0);
+            // cout << "phongValue: " << phongValue << endl;
+            // cout << "lambertValue: " << lambertValue << endl;
+
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
+            outputColor.clip();
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
+            outputColor.clip();
+        }
+
+        for (int i = 0; i < spotLights.size(); i++)
+        {
+            Vector3D lightPos = spotLights[i].point_light.light_pos;
+            Vector3D lightDir = spotLights[i].light_direction;
+            Ray rayL(lightPos, intersectionPoint - lightPos);
+            lightDir.normalize();
+            rayL.dir.normalize();
+
+            double beta = acos(dot(rayL.dir, lightDir)) * 180 / pi;
+            if (beta > spotLights[i].cutoff_angle)
+            {
+                continue;
+            }
+
+            double intensity = pow(dot(rayL.dir, lightDir), 2);
+            outputColor = outputColor * intensity;
+            outputColor.clip();
+
+            double t, tMinShadow = INFINITY;
+            for (int j = 0; j < objects.size(); j++)
+            {
+                color blackDummy(0, 0, 0);
+                t = objects[j]->intersect(rayL, blackDummy, 0);
+                if (t > 0 && t < tMinShadow)
+                {
+                    tMinShadow = t;
+                }
+            }
+            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
+            double tuningMargin = 0.000001;
+            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
+            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
+            if (distIncidentIntersection > distIncidentShadow)
+            {
+                continue;
+            }
+
+            double lambertValue = max(dot((rayL.dir), normal), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
+            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
+            // cout << "phongValue: " << phongValue << endl;
+            // cout << "lambertValue: " << lambertValue << endl;
+
+            outputColor = outputColor + (spotLights[i].point_light.light_color * this->c) * (this->coEfficients[1] * lambertValue);
+            outputColor.clip();
+            outputColor = outputColor + (spotLights[i].point_light.light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
+            outputColor.clip();
+        }
+
+        // reflection
+        if (level >= recursionLevel)
+        {
+            return tMin;
+        }
+
+        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
+        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
+
+        int nearestRef = -1;
+        double tMinReflected = INFINITY;
+        color dummyRef(0, 0, 0);
+        for (int i = 0; i < objects.size(); i++)
+        {
+            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
+            if (t > 0 && t < tMinReflected)
+            {
+                tMinReflected = t;
+                nearestRef = i;
+            }
+        }
+
+        color reflectedColor(0, 0, 0);
+        if (nearestRef != -1)
+        {
+            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
+            outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
+            outputColor.clip();
+        }
+
+        return tMin;
     }
 };
-
-extern vector<Object *> objects; // from main file
-extern Vector3D eye;             // from main file
-extern int recursionLevel;       // from main file
 
 class Floor : public Object
 {
@@ -316,8 +481,10 @@ public:
     double intersect(Ray ray, color &outputColor, int level)
     {
         Vector3D normal = Vector3D(0, 0, 1);
-        if (dot(eye, normal) > 0)
+        
+        if (dot(eye, normal) <= 0 || dot(ray.dir, normal) > 0)
         {
+            //cout << "Floor::intersect: ray is not facing the floor" << endl;
             normal = normal * -1.0;
         }
         normal.normalize();
@@ -325,7 +492,7 @@ public:
         double tMin = INFINITY;
         if (dot(ray.dir, normal) != 0)
         {
-            tMin = -(dot(ray.start, normal) + reference_point.z) / dot(ray.dir, normal);
+            tMin = - (dot(ray.start, normal) / dot(ray.dir, normal));
         }
 
         if (tMin > 0 && tMin < INFINITY)
@@ -355,6 +522,8 @@ public:
         // ambient
         outputColor = thisColor * this->coEfficients[0];
 
+        
+
         // diffuse and specular
         for (int i = 0; i < pointLights.size(); i++)
         {
@@ -381,14 +550,60 @@ public:
                 continue;
             }
 
-            double lambertValue = max(dot((rayL.dir), normal), 0.0);
-            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
-            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
+            double lambertValue = max(dot((rayL.dir * -1.0), normal), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * dot((rayL.dir), normal));
+            double phongValue = max(dot(rayL.dir*-1.0, rayR.dir), 0.0);
             // cout << "phongValue: " << phongValue << endl;
             // cout << "lambertValue: " << lambertValue << endl;
 
             outputColor = outputColor + (pointLights[i].light_color * thisColor) * (this->coEfficients[1] * lambertValue);
             outputColor = outputColor + (pointLights[i].light_color * thisColor) * (this->coEfficients[2] * pow(phongValue, this->shine));
+        }
+
+        for (int i = 0; i < spotLights.size(); i++)
+        {
+            Vector3D lightPos = spotLights[i].point_light.light_pos;
+            Vector3D lightDir = spotLights[i].light_direction;
+            Ray rayL(lightPos, intersectionPoint - lightPos);
+            lightDir.normalize();
+            rayL.dir.normalize();
+
+            double beta = acos(dot(rayL.dir, lightDir)) * 180 / pi;
+            if (beta > spotLights[i].cutoff_angle)
+            {
+                continue;
+            }
+
+            double intensity = pow(dot(rayL.dir, lightDir), 2);
+            outputColor = outputColor * intensity;
+
+            double t, tMinShadow = INFINITY;
+            for (int j = 0; j < objects.size(); j++)
+            {
+                color blackDummy(0, 0, 0);
+                t = objects[j]->intersect(rayL, blackDummy, 0);
+                if (t > 0 && t < tMinShadow)
+                {
+                    tMinShadow = t;
+                }
+            }
+            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
+            double tuningMargin = 0.000001;
+            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
+            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
+            if (distIncidentIntersection > distIncidentShadow)
+            {
+                continue;
+            }
+
+            double lambertValue = max(dot((rayL.dir * -1.0), normal), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * dot((rayL.dir), normal));
+            double phongValue = max(dot(rayL.dir*-1.0, rayR.dir), 0.0);
+            // cout << "phongValue: " << phongValue << endl;
+            // cout << "lambertValue: " << lambertValue << endl;
+
+            outputColor = outputColor + (spotLights[i].point_light.light_color * thisColor) * (this->coEfficients[1] * lambertValue);
+            outputColor = outputColor + (spotLights[i].point_light.light_color * thisColor) * (this->coEfficients[2] * pow(phongValue, this->shine));
         }
 
         // reflection
@@ -414,6 +629,7 @@ public:
         }
 
         color reflectedColor(0, 0, 0);
+        //cout << "nearestRef: " << nearestRef << endl;
         if (nearestRef != -1)
         {
             objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
@@ -423,10 +639,6 @@ public:
         outputColor.clip();
 
         return tMin;
-    }
-
-    ~Floor()
-    {
     }
 };
 
@@ -483,7 +695,14 @@ public:
         }
     }
 
-    double intersect(Ray ray, color &outputColor, int level)
+    Vector3D getNormal(Vector3D point)
+    {
+        Vector3D normal = point - this->reference_point;
+        normal.normalize();
+        return normal;
+    }
+
+    double getIntersectingPoint(Ray ray, color &outputColor, int level)
     {
         Vector3D Ro = ray.start - this->reference_point;
         Vector3D Rd = ray.dir;
@@ -507,107 +726,19 @@ public:
         }
         else
         {
-            double t1 = max((-b + sqrt(d)) / (2 * a), 0.0);
-            double t2 = max((-b - sqrt(d)) / (2 * a), 0.0);
-            tMin = min(t1, t2);
-        }
-
-        // cout << "tMin: " << tMin << endl;
-        // if (level != 0)
-        // {
-        //     cout << "Level : " << level << endl;
-        // }
-
-        if (level == 0)
-        {
-            return tMin;
-        }
-
-        // cout << "here" << endl;
-
-        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
-        Vector3D normal = intersectionPoint - this->reference_point;
-        normal.normalize();
-        if (distance(eye, this->reference_point) > this->length)
-        {
-            normal = normal * -1.0;
-        }
-
-        // ambient
-        outputColor = this->c * this->coEfficients[0];
-
-        // diffuse and specular
-        for (int i = 0; i < pointLights.size(); i++)
-        {
-            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
-            double t, tMinShadow = INFINITY;
-            for (int j = 0; j < objects.size(); j++)
+            double t1 = (-b + sqrt(d)) / (2 * a);
+            double t2 = (-b - sqrt(d)) / (2 * a);
+            if(t2>0)
             {
-                color blackDummy(0, 0, 0);
-                t = objects[j]->intersect(rayL, blackDummy, 0);
-                if (t > 0 && t < tMinShadow)
-                {
-                    tMinShadow = t;
-                }
+                tMin = t2;
             }
-
-            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
-            double tuningMargin = 0.000001;
-            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
-            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
-
-            if (distIncidentIntersection > distIncidentShadow)
-            {
-                // cout << "herer" << endl;
-                continue;
+            else{
+                tMin = t1;
             }
-
-            double lambertValue = max(dot((rayL.dir), normal), 0.0);
-            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
-            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
-            // cout << "phongValue: " << phongValue << endl;
-            // cout << "lambertValue: " << lambertValue << endl;
-
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
+            //tMin = min(t1, t2);
         }
-
-        // reflection
-        if (level >= recursionLevel)
-        {
-            return tMin;
-        }
-
-        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
-        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
-
-        int nearestRef = -1;
-        double tMinReflected = INFINITY;
-        color dummyRef(0, 0, 0);
-        for (int i = 0; i < objects.size(); i++)
-        {
-            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
-            if (t > 0 && t < tMinReflected)
-            {
-                tMinReflected = t;
-                nearestRef = i;
-            }
-        }
-
-        color reflectedColor(0, 0, 0);
-        if (nearestRef != -1)
-        {
-            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
-        }
-
-        outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
-        outputColor.clip();
 
         return tMin;
-    }
-
-    ~Sphere()
-    {
     }
 };
 
@@ -642,7 +773,14 @@ public:
         glEnd();
     }
 
-    double intersect(Ray ray, color &outputColor, int level)
+    Vector3D getNormal(Vector3D point)
+    {
+        Vector3D normal = cross(this->vertexB - this->vertexA, this->vertexC - this->vertexA);
+        normal.normalize();
+        return normal;
+    }
+
+    double getIntersectingPoint(Ray ray, color &outputColor, int level)
     {
         double tMin = -1.0;
         Vector3D Ro = ray.start;
@@ -674,91 +812,6 @@ public:
                 tMin = tVal;
             }
         }
-
-        if (level == 0)
-        {
-            return tMin;
-        }
-
-        // cout << "here" << endl;
-
-        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
-        Vector3D normal = cross((vertexB - vertexA), (vertexC - vertexA));
-        normal.normalize();
-        if (distance(eye, this->reference_point) > this->length)
-        {
-            normal = normal * -1.0;
-        }
-
-        // ambient
-        outputColor = this->c * this->coEfficients[0];
-
-        // diffuse and specular
-        for (int i = 0; i < pointLights.size(); i++)
-        {
-            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
-            double t, tMinShadow = INFINITY;
-            for (int j = 0; j < objects.size(); j++)
-            {
-                color blackDummy(0, 0, 0);
-                t = objects[j]->intersect(rayL, blackDummy, 0);
-                if (t > 0 && t < tMinShadow)
-                {
-                    tMinShadow = t;
-                }
-            }
-
-            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
-            double tuningMargin = 0.000001;
-            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
-            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
-
-            if (distIncidentIntersection > distIncidentShadow)
-            {
-                // cout << "herer" << endl;
-                continue;
-            }
-
-            double lambertValue = max(dot((rayL.dir), normal), 0.0);
-            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
-            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
-            // cout << "phongValue: " << phongValue << endl;
-            // cout << "lambertValue: " << lambertValue << endl;
-
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
-        }
-
-        // reflection
-        if (level >= recursionLevel)
-        {
-            return tMin;
-        }
-
-        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
-        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
-
-        int nearestRef = -1;
-        double tMinReflected = INFINITY;
-        color dummyRef(0, 0, 0);
-        for (int i = 0; i < objects.size(); i++)
-        {
-            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
-            if (t > 0 && t < tMinReflected)
-            {
-                tMinReflected = t;
-                nearestRef = i;
-            }
-        }
-
-        color reflectedColor(0, 0, 0);
-        if (nearestRef != -1)
-        {
-            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
-        }
-
-        outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
-        outputColor.clip();
 
         return tMin;
     }
@@ -797,7 +850,17 @@ public:
         jVal = j;
     }
 
-    double intersect(Ray ray, color &outputColor, int level)
+    Vector3D getNormal(Vector3D point)
+    {
+        Vector3D normal(0, 0, 0);
+        normal.x = 2 * aVal * point.x + dVal * point.y + eVal * point.z + gVal;
+        normal.y = 2 * bVal * point.y + dVal * point.x + fVal * point.z + hVal;
+        normal.z = 2 * cVal * point.z + eVal * point.x + fVal * point.y + iVal;
+        normal.normalize();
+        return normal;
+    }
+
+    double getIntersectingPoint(Ray ray, color &outputColor, int level)
     {
         Vector3D Ro = ray.start;
         Vector3D Rd = ray.dir;
@@ -868,94 +931,6 @@ public:
         {
             tMin = t2;
         }
-
-        if (level == 0)
-        {
-            return tMin;
-        }
-
-        // cout << "here" << endl;
-
-        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
-        Vector3D normal(0,0,0);
-        normal.x = 2 * aVal * intersectionPoint.x + dVal * intersectionPoint.y + eVal * intersectionPoint.z + gVal;
-        normal.y = 2 * bVal * intersectionPoint.y + dVal * intersectionPoint.x + fVal * intersectionPoint.z + hVal;
-        normal.z = 2 * cVal * intersectionPoint.z + eVal * intersectionPoint.x + fVal * intersectionPoint.y + iVal;
-        normal.normalize();
-        if (distance(eye, this->reference_point) > this->length)
-        {
-            normal = normal * -1.0;
-        }
-
-        // ambient
-        outputColor = this->c * this->coEfficients[0];
-
-        // diffuse and specular
-        for (int i = 0; i < pointLights.size(); i++)
-        {
-            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
-            double t, tMinShadow = INFINITY;
-            for (int j = 0; j < objects.size(); j++)
-            {
-                color blackDummy(0, 0, 0);
-                t = objects[j]->intersect(rayL, blackDummy, 0);
-                if (t > 0 && t < tMinShadow)
-                {
-                    tMinShadow = t;
-                }
-            }
-
-            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
-            double tuningMargin = 0.000001;
-            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
-            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
-
-            if (distIncidentIntersection > distIncidentShadow)
-            {
-                // cout << "herer" << endl;
-                continue;
-            }
-
-            double lambertValue = max(dot((rayL.dir), normal), 0.0);
-            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
-            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
-            // cout << "phongValue: " << phongValue << endl;
-            // cout << "lambertValue: " << lambertValue << endl;
-
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
-            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
-        }
-
-        // reflection
-        if (level >= recursionLevel)
-        {
-            return tMin;
-        }
-
-        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
-        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
-
-        int nearestRef = -1;
-        double tMinReflected = INFINITY;
-        color dummyRef(0, 0, 0);
-        for (int i = 0; i < objects.size(); i++)
-        {
-            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
-            if (t > 0 && t < tMinReflected)
-            {
-                tMinReflected = t;
-                nearestRef = i;
-            }
-        }
-
-        color reflectedColor(0, 0, 0);
-        if (nearestRef != -1)
-        {
-            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
-        }
-
-        outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
-        outputColor.clip();
 
         return tMin;
     }

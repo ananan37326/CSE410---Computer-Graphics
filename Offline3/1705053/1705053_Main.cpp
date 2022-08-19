@@ -49,7 +49,7 @@ vector<SpotLight> spotLights;
 Vector3D origin(-floorWidth / 2, -floorWidth / 2, 0);
 
 // Initial value for the vectors
-Vector3D eye(50.2795,63.396,129.66);
+Vector3D eye(100, 100, 20);
 Vector3D u(0, 0, 1);
 Vector3D r(-1 / sqrt(2), 1 / sqrt(2), 0);
 Vector3D l(-1 / sqrt(2), -1 / sqrt(2), 0);
