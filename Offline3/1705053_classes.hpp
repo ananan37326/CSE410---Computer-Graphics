@@ -52,6 +52,11 @@ double dot(Vector3D a, Vector3D b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+Vector3D cross(Vector3D a, Vector3D b)
+{
+    return Vector3D(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
 double distance(Vector3D a, Vector3D b)
 {
     return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
@@ -224,7 +229,7 @@ public:
 
     virtual void draw()
     {
-        cout << "Drawing an object" << endl;
+        
     }
 
     virtual double intersect(Ray ray, color &color, int level)
@@ -334,19 +339,18 @@ public:
                 tMin = INFINITY;
             }
         }
-        //cout << "tMin: " << tMin << endl;
+        // cout << "tMin: " << tMin << endl;
         if (level == 0)
         {
             return tMin;
         }
 
-
         Vector3D intersectionPoint = ray.start + ray.dir * tMin;
         Vector3D distIntersectionReference = intersectionPoint - reference_point;
-        int x = distIntersectionReference.x/tileWidth;
-        int y = distIntersectionReference.y/tileWidth;
-        
-        color thisColor((x+y)%2, (x+y)%2, (x+y)%2);
+        int x = distIntersectionReference.x / tileWidth;
+        int y = distIntersectionReference.y / tileWidth;
+
+        color thisColor((x + y) % 2, (x + y) % 2, (x + y) % 2);
 
         // ambient
         outputColor = thisColor * this->coEfficients[0];
@@ -604,5 +608,355 @@ public:
 
     ~Sphere()
     {
+    }
+};
+
+class Triangle : public Object
+{
+public:
+    Vector3D vertexA, vertexB, vertexC;
+
+    Triangle()
+    {
+        this->vertexA = Vector3D(0, 0, 0);
+        this->vertexB = Vector3D(0, 0, 0);
+        this->vertexC = Vector3D(0, 0, 0);
+    }
+
+    Triangle(Vector3D a, Vector3D b, Vector3D c)
+    {
+        this->vertexA = a;
+        this->vertexB = b;
+        this->vertexC = c;
+    }
+
+    void draw()
+    {
+        glBegin(GL_TRIANGLES);
+        {
+            glColor3f(this->c.r, this->c.g, this->c.b);
+            glVertex3f(this->vertexA.x, this->vertexA.y, this->vertexA.z);
+            glVertex3f(this->vertexB.x, this->vertexB.y, this->vertexB.z);
+            glVertex3f(this->vertexC.x, this->vertexC.y, this->vertexC.z);
+        }
+        glEnd();
+    }
+
+    double intersect(Ray ray, color &outputColor, int level)
+    {
+        double tMin = -1.0;
+        Vector3D Ro = ray.start;
+        Vector3D Rd = ray.dir;
+
+        double detVal = (vertexA.x - vertexB.x) * ((vertexA.y - vertexC.y) * Rd.z - (vertexA.z - vertexC.z) * Rd.y);
+        detVal += (vertexA.y - vertexB.y) * ((vertexA.z - vertexC.z) * Rd.x - (vertexA.x - vertexC.x) * Rd.z);
+        detVal += (vertexA.z - vertexB.z) * ((vertexA.x - vertexC.x) * Rd.y - (vertexA.y - vertexC.y) * Rd.x);
+
+        double betaVal = (vertexA.x - Ro.x) * ((vertexA.y - vertexC.y) * Rd.z - (vertexA.z - vertexC.z) * Rd.y);
+        betaVal += (vertexA.y - Ro.y) * ((vertexA.z - vertexC.z) * Rd.x - (vertexA.x - vertexC.x) * Rd.z);
+        betaVal += (vertexA.z - Ro.z) * ((vertexA.x - vertexC.x) * Rd.y - (vertexA.y - vertexC.y) * Rd.x);
+        betaVal /= detVal;
+
+        double gammaVal = (vertexA.x - vertexB.x) * ((vertexA.y - Ro.y) * Rd.z - (vertexA.z - Ro.z) * Rd.y);
+        gammaVal += (vertexA.y - vertexB.y) * ((vertexA.z - Ro.z) * Rd.x - (vertexA.x - Ro.x) * Rd.z);
+        gammaVal += (vertexA.z - vertexB.z) * ((vertexA.x - Ro.x) * Rd.y - (vertexA.y - Ro.y) * Rd.x);
+        gammaVal /= detVal;
+
+        double tVal = (vertexA.x - vertexB.x) * ((vertexA.y - vertexC.y) * (vertexA.z - Ro.z) - (vertexA.z - vertexC.z) * (vertexA.y - Ro.y));
+        tVal += (vertexA.y - vertexB.y) * ((vertexA.z - vertexC.z) * (vertexA.x - Ro.x) - (vertexA.x - vertexC.x) * (vertexA.z - Ro.z));
+        tVal += (vertexA.z - vertexB.z) * ((vertexA.x - vertexC.x) * (vertexA.y - Ro.y) - (vertexA.y - vertexC.y) * (vertexA.x - Ro.x));
+        tVal /= detVal;
+
+        if (detVal != 0)
+        {
+            if (betaVal > 0 && gammaVal > 0 && (betaVal + gammaVal < 1) && tVal > 0)
+            {
+                tMin = tVal;
+            }
+        }
+
+        if (level == 0)
+        {
+            return tMin;
+        }
+
+        // cout << "here" << endl;
+
+        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
+        Vector3D normal = cross((vertexB - vertexA), (vertexC - vertexA));
+        normal.normalize();
+        if (distance(eye, this->reference_point) > this->length)
+        {
+            normal = normal * -1.0;
+        }
+
+        // ambient
+        outputColor = this->c * this->coEfficients[0];
+
+        // diffuse and specular
+        for (int i = 0; i < pointLights.size(); i++)
+        {
+            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
+            double t, tMinShadow = INFINITY;
+            for (int j = 0; j < objects.size(); j++)
+            {
+                color blackDummy(0, 0, 0);
+                t = objects[j]->intersect(rayL, blackDummy, 0);
+                if (t > 0 && t < tMinShadow)
+                {
+                    tMinShadow = t;
+                }
+            }
+
+            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
+            double tuningMargin = 0.000001;
+            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
+            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
+
+            if (distIncidentIntersection > distIncidentShadow)
+            {
+                // cout << "herer" << endl;
+                continue;
+            }
+
+            double lambertValue = max(dot((rayL.dir), normal), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
+            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
+            // cout << "phongValue: " << phongValue << endl;
+            // cout << "lambertValue: " << lambertValue << endl;
+
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
+        }
+
+        // reflection
+        if (level >= recursionLevel)
+        {
+            return tMin;
+        }
+
+        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
+        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
+
+        int nearestRef = -1;
+        double tMinReflected = INFINITY;
+        color dummyRef(0, 0, 0);
+        for (int i = 0; i < objects.size(); i++)
+        {
+            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
+            if (t > 0 && t < tMinReflected)
+            {
+                tMinReflected = t;
+                nearestRef = i;
+            }
+        }
+
+        color reflectedColor(0, 0, 0);
+        if (nearestRef != -1)
+        {
+            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
+        }
+
+        outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
+        outputColor.clip();
+
+        return tMin;
+    }
+};
+
+class GenQuad : public Object
+{
+public:
+    double aVal, bVal, cVal, dVal, eVal, fVal, gVal, hVal, iVal, jVal;
+
+    GenQuad()
+    {
+        aVal = 0;
+        bVal = 0;
+        cVal = 0;
+        dVal = 0;
+        eVal = 0;
+        fVal = 0;
+        gVal = 0;
+        hVal = 0;
+        iVal = 0;
+        jVal = 0;
+    }
+
+    GenQuad(double a, double b, double c, double d, double e, double f, double g, double h, double i, double j)
+    {
+        aVal = a;
+        bVal = b;
+        cVal = c;
+        dVal = d;
+        eVal = e;
+        fVal = f;
+        gVal = g;
+        hVal = h;
+        iVal = i;
+        jVal = j;
+    }
+
+    double intersect(Ray ray, color &outputColor, int level)
+    {
+        Vector3D Ro = ray.start;
+        Vector3D Rd = ray.dir;
+        double tMin = INFINITY;
+        double t1 = -1, t2 = -1;
+
+        double aQuad = aVal * Rd.x * Rd.x + bVal * Rd.y * Rd.y + cVal * Rd.z * Rd.z + dVal * Rd.x * Rd.y + eVal * Rd.x * Rd.z + fVal * Rd.y * Rd.z;
+        double bQuad = 2 * aVal * Ro.x * Rd.x + 2 * bVal * Ro.y * Rd.y + 2 * cVal * Ro.z * Rd.z + dVal * (Ro.x * Rd.y + Ro.y * Rd.x) + eVal * (Ro.x * Rd.z + Ro.z * Rd.x) + fVal * (Ro.y * Rd.z + Ro.z * Rd.y) + gVal * Rd.x + hVal * Rd.y + iVal * Rd.z;
+        double cQuad = aVal * Ro.x * Ro.x + bVal * Ro.y * Ro.y + cVal * Ro.z * Ro.z + dVal * Ro.x * Ro.y + eVal * Ro.x * Ro.z + fVal * Ro.y * Ro.z + gVal * Ro.x + hVal * Ro.y + iVal * Ro.z + jVal;
+
+        double discriminant = bQuad * bQuad - 4 * aQuad * cQuad;
+
+        if (aQuad == 0)
+        {
+            if (bQuad != 0)
+            {
+                t1 = -cQuad / bQuad;
+            }
+        }
+
+        else
+        {
+            if (discriminant > 0)
+            {
+                t1 = (-bQuad - sqrt(discriminant)) / (2 * aQuad);
+                t2 = (-bQuad + sqrt(discriminant)) / (2 * aQuad);
+            }
+            else if (discriminant == 0)
+            {
+                t1 = -bQuad / (2 * aQuad);
+            }
+        }
+
+        if (t1 != -1)
+        {
+            if (t2 != -1)
+            {
+                Vector3D intersectionPoint1 = Ro + Rd * t1;
+                Vector3D intersectionPoint2 = Ro + Rd * t2;
+
+                if ((length != 0 && (intersectionPoint1.x < reference_point.x || intersectionPoint1.x > reference_point.x + length)) || (width != 0 && (intersectionPoint1.y < reference_point.y || intersectionPoint1.y > reference_point.y + width)) || (height != 0 && (intersectionPoint1.z < reference_point.z || intersectionPoint1.z > reference_point.z + height)))
+                {
+                    t1 = -1;
+                }
+                if ((length != 0 && (intersectionPoint2.x < reference_point.x || intersectionPoint2.x > reference_point.x + length)) || (width != 0 && (intersectionPoint2.y < reference_point.y || intersectionPoint2.y > reference_point.y + width)) || (height != 0 && (intersectionPoint2.z < reference_point.z || intersectionPoint2.z > reference_point.z + height)))
+                {
+                    t2 = -1;
+                }
+            }
+            else
+            {
+                Vector3D intersectionPoint = Ro + Rd * t1;
+                if ((length != 0 && (intersectionPoint.x < reference_point.x || intersectionPoint.x > reference_point.x + length)) || (width != 0 && (intersectionPoint.y < reference_point.y || intersectionPoint.y > reference_point.y + width)) || (height != 0 && (intersectionPoint.z < reference_point.z || intersectionPoint.z > reference_point.z + height)))
+                {
+                    t1 = -1;
+                }
+            }
+        }
+        if (t1 != -1 && t2 != -1)
+        {
+            tMin = min(t1, t2);
+        }
+        else if (t1 != -1)
+        {
+            tMin = t1;
+        }
+        else if (t2 != -1)
+        {
+            tMin = t2;
+        }
+
+        if (level == 0)
+        {
+            return tMin;
+        }
+
+        // cout << "here" << endl;
+
+        Vector3D intersectionPoint = ray.start + ray.dir * tMin;
+        Vector3D normal(0,0,0);
+        normal.x = 2 * aVal * intersectionPoint.x + dVal * intersectionPoint.y + eVal * intersectionPoint.z + gVal;
+        normal.y = 2 * bVal * intersectionPoint.y + dVal * intersectionPoint.x + fVal * intersectionPoint.z + hVal;
+        normal.z = 2 * cVal * intersectionPoint.z + eVal * intersectionPoint.x + fVal * intersectionPoint.y + iVal;
+        normal.normalize();
+        if (distance(eye, this->reference_point) > this->length)
+        {
+            normal = normal * -1.0;
+        }
+
+        // ambient
+        outputColor = this->c * this->coEfficients[0];
+
+        // diffuse and specular
+        for (int i = 0; i < pointLights.size(); i++)
+        {
+            Ray rayL(pointLights[i].light_pos, intersectionPoint - pointLights[i].light_pos);
+            double t, tMinShadow = INFINITY;
+            for (int j = 0; j < objects.size(); j++)
+            {
+                color blackDummy(0, 0, 0);
+                t = objects[j]->intersect(rayL, blackDummy, 0);
+                if (t > 0 && t < tMinShadow)
+                {
+                    tMinShadow = t;
+                }
+            }
+
+            Vector3D whereIntersectionPoint = rayL.start + rayL.dir * tMinShadow;
+            double tuningMargin = 0.000001;
+            double distIncidentIntersection = distance(intersectionPoint, rayL.start) - tuningMargin;
+            double distIncidentShadow = distance(whereIntersectionPoint, rayL.start);
+
+            if (distIncidentIntersection > distIncidentShadow)
+            {
+                // cout << "herer" << endl;
+                continue;
+            }
+
+            double lambertValue = max(dot((rayL.dir), normal), 0.0);
+            Ray rayR(intersectionPoint, rayL.dir - normal * 2.0 * -lambertValue);
+            double phongValue = max(dot(rayL.dir, rayR.dir), 0.0);
+            // cout << "phongValue: " << phongValue << endl;
+            // cout << "lambertValue: " << lambertValue << endl;
+
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[1] * lambertValue);
+            outputColor = outputColor + (pointLights[i].light_color * this->c) * (this->coEfficients[2] * pow(phongValue, this->shine));
+        }
+
+        // reflection
+        if (level >= recursionLevel)
+        {
+            return tMin;
+        }
+
+        Vector3D reflectionDir = ray.dir - normal * 2.0 * dot(ray.dir, normal);
+        Ray rayReflected(intersectionPoint + reflectionDir, reflectionDir);
+
+        int nearestRef = -1;
+        double tMinReflected = INFINITY;
+        color dummyRef(0, 0, 0);
+        for (int i = 0; i < objects.size(); i++)
+        {
+            double t = objects[i]->intersect(rayReflected, dummyRef, 0);
+            if (t > 0 && t < tMinReflected)
+            {
+                tMinReflected = t;
+                nearestRef = i;
+            }
+        }
+
+        color reflectedColor(0, 0, 0);
+        if (nearestRef != -1)
+        {
+            objects[nearestRef]->intersect(rayReflected, reflectedColor, level + 1);
+        }
+
+        outputColor = outputColor + (reflectedColor * this->coEfficients[3]);
+        outputColor.clip();
+
+        return tMin;
     }
 };

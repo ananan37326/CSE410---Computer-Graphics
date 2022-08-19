@@ -35,8 +35,8 @@ int numPointLights;
 int numSpotLights;
 
 // Floor parameters
-double floorWidth = 200;
-double floorHeight = 200;
+double floorWidth = 1000;
+double floorHeight = 1000;
 double tileWidth = 20;
 double tileHeight = 20;
 double numTiles = floorWidth / tileWidth;
@@ -509,6 +509,60 @@ void loadData()
 
 			fin >> sphereColor.r >> sphereColor.g >> sphereColor.b;
 			currentObject->setColor(sphereColor);
+
+			fin >> ambient >> diffuse >> specular >> reflection;
+			currentObject->setCoefficients(ambient, diffuse, specular, reflection);
+
+			fin >> shine;
+			currentObject->setShine(shine);
+
+			objects.push_back(currentObject);
+		}
+		else if(objectType=="triangle")
+		{
+			Vector3D v1, v2, v3;
+			color triangleColor;
+			double ambient, diffuse, specular, reflection;
+			int shine;
+
+			fin >> v1.x >> v1.y >> v1.z;
+			fin >> v2.x >> v2.y >> v2.z;
+			fin >> v3.x >> v3.y >> v3.z;
+			currentObject = new Triangle(v1, v2, v3);
+
+			fin >> triangleColor.r >> triangleColor.g >> triangleColor.b;
+			currentObject->setColor(triangleColor);
+
+			fin >> ambient >> diffuse >> specular >> reflection;
+			currentObject->setCoefficients(ambient, diffuse, specular, reflection);
+
+			fin >> shine;
+			currentObject->setShine(shine);
+			objects.push_back(currentObject);
+		}
+
+		else if (objectType=="general")
+		{
+			double a, b, c, d, e, f, g, h, i, j;
+			double length, width, height;
+			Vector3D cubeRefPoint;
+			color quadColor;
+			double ambient, diffuse, specular, reflection;
+			int shine;
+
+			fin >> a >> b >> c >> d >> e >> f >> g >> h >> i >> j;
+			currentObject = new GenQuad(a, b, c, d, e, f, g, h, i, j);
+
+			fin >> cubeRefPoint.x >> cubeRefPoint.y >> cubeRefPoint.z;
+			currentObject->reference_point = cubeRefPoint;
+
+			fin >> length >> width >> height;
+			currentObject->length = length;
+			currentObject->width = width;
+			currentObject->height = height;
+
+			fin >> quadColor.r >> quadColor.g >> quadColor.b;
+			currentObject->setColor(quadColor);
 
 			fin >> ambient >> diffuse >> specular >> reflection;
 			currentObject->setCoefficients(ambient, diffuse, specular, reflection);
