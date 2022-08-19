@@ -13,6 +13,9 @@
         "memory": "cpp",
         "streambuf": "cpp",
         "regex": "cpp",
-        "tuple": "cpp"
+        "tuple": "cpp",
+        "bitset": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp"
     }
 }

@@ -3,38 +3,56 @@
 #include <math.h>
 
 #include <windows.h>
-#include <GL/glut.h>
 #include "1705053_classes.hpp"
+#include "bitmap_image.hpp"
 
 #define pi (2 * acos(0.0))
 #define move_distance 2
 #define rotate_angle 0.08
 
-
-
 // Global Variables
+
+// file variables
+ifstream fin;
+int imageCount = 10;
+
+// camera and glu parameters
 double cameraHeight;
 double cameraAngle;
 int drawgrid;
 int drawaxes;
 double angle;
 
+double screenWidth = 600;
+double screenHeight = 600;
+double viewAngle = 80;
 
+// necessary variables
+int recursionLevel;
+int imagePixel;
+int numObjects;
+int numPointLights;
+int numSpotLights;
+
+// Floor parameters
 double floorWidth = 200;
 double floorHeight = 200;
 double tileWidth = 20;
 double tileHeight = 20;
 double numTiles = floorWidth / tileWidth;
 
-Vector3D origin(floorWidth/2,floorHeight/2, 0);
+// Vectors of objects
+vector<Object *> objects;
+vector<PointLight> pointLights;
+vector<SpotLight> spotLights;
+
+Vector3D origin(-floorWidth / 2, -floorWidth / 2, 0);
 
 // Initial value for the vectors
-Vector3D pos(100, 100, 0);
+Vector3D eye(100, 100, 20);
 Vector3D u(0, 0, 1);
 Vector3D r(-1 / sqrt(2), 1 / sqrt(2), 0);
 Vector3D l(-1 / sqrt(2), -1 / sqrt(2), 0);
-
-
 
 // MOVE OPERATIONS
 
@@ -43,7 +61,7 @@ void move_forward()
 	// pos.x += move_distance * l.x;
 	// pos.y += move_distance * l.y;
 	// pos.z += move_distance * l.z;
-	pos = pos + l * move_distance;
+	eye = eye + l * move_distance;
 }
 
 void move_backward()
@@ -51,7 +69,7 @@ void move_backward()
 	// pos.x -= move_distance * l.x;
 	// pos.y -= move_distance * l.y;
 	// pos.z -= move_distance * l.z;
-	pos = pos - l * move_distance;
+	eye = eye - l * move_distance;
 }
 
 void move_right()
@@ -59,7 +77,7 @@ void move_right()
 	// pos.x += move_distance * r.x;
 	// pos.y += move_distance * r.y;
 	// pos.z += move_distance * r.z;
-	pos = pos + r * move_distance;
+	eye = eye + r * move_distance;
 }
 
 void move_left()
@@ -67,7 +85,7 @@ void move_left()
 	// pos.x -= move_distance * r.x;
 	// pos.y -= move_distance * r.y;
 	// pos.z -= move_distance * r.z;
-	pos = pos - r * move_distance;
+	eye = eye - r * move_distance;
 }
 
 void move_up()
@@ -75,7 +93,7 @@ void move_up()
 	// pos.x += move_distance * u.x;
 	// pos.y += move_distance * u.y;
 	// pos.z += move_distance * u.z;
-	pos = pos + u * move_distance;
+	eye = eye + u * move_distance;
 }
 
 void move_down()
@@ -83,7 +101,7 @@ void move_down()
 	// pos.x -= move_distance * u.x;
 	// pos.y -= move_distance * u.y;
 	// pos.z -= move_distance * u.z;
-	pos = pos - u * move_distance;
+	eye = eye - u * move_distance;
 }
 
 // ROTATE OPERATIONS
@@ -122,6 +140,69 @@ void tilt_anticlockwise()
 {
 	r = r * cos(-rotate_angle) - u * sin(-rotate_angle);
 	u = u * cos(-rotate_angle) + r * sin(-rotate_angle);
+}
+
+// user defined functions
+void capture()
+{
+	bitmap_image image(imagePixel, imagePixel);
+
+	for (int i = 0; i < imagePixel; i++)
+	{
+		for (int j = 0; j < imagePixel; j++)
+		{
+			image.set_pixel(i, j, 0, 0, 0);
+		}
+	}
+
+	double planeDistance = (screenHeight / 2.0) / tan((viewAngle*pi) / (2.0 * 180.0));
+	Vector3D topLeft = eye + l * planeDistance - r * (screenWidth / 2.0) + u * (screenHeight / 2.0);
+	double du = screenWidth / imagePixel;
+	double dv = screenHeight / imagePixel;
+	topLeft = topLeft + r * (0.5 * du) - u * (0.5 * dv);
+
+	int nearest;
+	double t, tMin;
+
+	for (int i = 0; i < imagePixel; i++)
+	{
+		for (int j = 0; j < imagePixel; j++)
+		{
+			Vector3D currentPixel = topLeft + r * (i * du) - u * (j * dv);
+			Ray rayCast(eye, currentPixel - eye);
+
+			tMin = INFINITY;
+			nearest = -1;
+			color pixelColor(0, 0, 0);
+			color dummyColor(0, 0, 0);
+
+			for (int k = 0; k < objects.size(); k++)
+			{
+				t = objects[k]->intersect(rayCast, dummyColor, 0);
+				if(t!=-1)
+				{
+					//cout << "inside capture, t: " << t << endl;
+				}
+
+				if (t > 0 && t < tMin)
+				{
+					tMin = t;
+					nearest = k;
+				}
+			}
+			if(nearest!=-1)
+			{
+				//cout << "i = " << i << " j = " << j << endl;
+				//cout << "nearest = " << nearest << endl;
+				tMin = objects[nearest]->intersect(rayCast, pixelColor, 1);
+				pixelColor = pixelColor * 255.0;
+				image.set_pixel(i, j, pixelColor.r, pixelColor.g, pixelColor.b);
+			}
+		}
+	}
+	imageCount++;
+	image.save_image("image"+to_string(imageCount)+".bmp");
+	cout << "image" + to_string(imageCount) + ".bmp" << " saved" << endl;
 }
 
 // DRAW OPERATIONS
@@ -186,24 +267,19 @@ void drawSquare(double a)
 	glEnd();
 }
 
-
-void drawFloor()
+void drawObjects()
 {
-	for (int i = 0; i < numTiles; i++)
+	for (int i = 0; i < objects.size(); i++)
 	{
-		for (int j = 0; j < numTiles; j++)
-		{
-			glColor3f((i + j) % 2, (i + j) % 2, (i + j) % 2);
+		objects[i]->draw();
+	}
+}
 
-			glBegin(GL_QUADS);
-			{
-				glVertex3f(origin.x + i * tileWidth, origin.y + j * tileWidth, origin.z);
-				glVertex3f(origin.x + i * tileWidth, origin.y + (j + 1) * tileWidth, origin.z);
-				glVertex3f(origin.x + (i + 1) * tileWidth, origin.y + (j + 1) * tileWidth, origin.z);
-				glVertex3f(origin.x + (i + 1) * tileWidth, origin.y + j * tileWidth, origin.z);
-			}
-			glEnd();
-		}
+void drawLights()
+{
+	for (int i = 0; i < pointLights.size(); i++)
+	{
+		pointLights[i].draw();
 	}
 }
 
@@ -229,6 +305,9 @@ void keyboardListener(unsigned char key, int x, int y)
 		break;
 	case '6':
 		tilt_anticlockwise();
+		break;
+	case '0':
+		capture();
 		break;
 	default:
 		break;
@@ -328,7 +407,7 @@ void display()
 
 	// gluLookAt(pos.x * cos(cameraAngle), pos.y * sin(cameraAngle), cameraHeight, pos.x + l.x, pos.y + l.y, pos.z + l.z, u.x, u.y, u.z);
 
-	gluLookAt(pos.x, pos.y, pos.z, pos.x + l.x, pos.y + l.y, pos.z + l.z, u.x, u.y, u.z);
+	gluLookAt(eye.x, eye.y, eye.z, eye.x + l.x, eye.y + l.y, eye.z + l.z, u.x, u.y, u.z);
 
 	// again select MODEL-VIEW
 	glMatrixMode(GL_MODELVIEW);
@@ -345,7 +424,8 @@ void display()
 	// drawCube();
 	// drawFullSphere();
 	// drawFullCylinder();
-	drawFloor();
+	drawObjects();
+	drawLights();
 
 	// ADD this line in the end --- if you use double buffer (i.e. GL_DOUBLE)
 	glutSwapBuffers();
@@ -380,11 +460,94 @@ void init()
 	glLoadIdentity();
 
 	// give PERSPECTIVE parameters
-	gluPerspective(80, 1, 1, 1000.0);
+	gluPerspective(viewAngle, 1, 1, 1000.0);
 	// field of view in the Y (vertically)
 	// aspect ratio that determines the field of view in the X direction (horizontally)
 	// near distance
 	// far distance
+}
+
+// User defined functions
+void loadData()
+{
+	fin.open("scene_test.txt");
+	if (!fin.is_open())
+	{
+		cout << "Error opening file" << endl;
+		exit(1);
+	}
+
+	fin >> recursionLevel;
+	fin >> imagePixel;
+
+	fin >> numObjects;
+
+	// adding floor to objects
+	Floor *floor = new Floor(floorWidth, floorHeight, tileWidth);
+	floor->setCoefficients(0.4, 0.2, 0.3, 0.3);
+	floor->setShine(5);
+	//objects.push_back(floor);
+
+	for (int i = 0; i < numObjects; i++)
+	{
+		Object *currentObject;
+		string objectType;
+		fin >> objectType;
+
+		if (objectType == "sphere")
+		{
+			cout << "Sphere" << endl;
+			Vector3D center;
+			color sphereColor;
+			double radius;
+			double ambient, diffuse, specular, reflection;
+			int shine;
+
+			fin >> center.x >> center.y >> center.z;
+			fin >> radius;
+			currentObject = new Sphere(center, radius);
+
+			fin >> sphereColor.r >> sphereColor.g >> sphereColor.b;
+			currentObject->setColor(sphereColor);
+
+			fin >> ambient >> diffuse >> specular >> reflection;
+			currentObject->setCoefficients(ambient, diffuse, specular, reflection);
+
+			fin >> shine;
+			currentObject->setShine(shine);
+
+			objects.push_back(currentObject);
+		}
+	}
+
+	objects.push_back(floor);
+
+	fin >> numPointLights;
+	cout << "Number of point lights: " << numPointLights << endl;
+	for (int i = 0; i < numPointLights; i++)
+	{
+		Vector3D position;
+		color lightColor;
+		fin >> position.x >> position.y >> position.z;
+		fin >> lightColor.r >> lightColor.g >> lightColor.b;
+		PointLight currentLight(position, lightColor);
+		pointLights.push_back(currentLight);
+	}
+}
+
+void printObjects()
+{
+	for (int i = 0; i < objects.size(); i++)
+	{
+		cout << objects[i]->reference_point.x << " " << objects[i]->reference_point.y << " " << objects[i]->reference_point.z << endl;
+		cout << objects[i]->c.r << " " << objects[i]->c.g << " " << objects[i]->c.b << endl;
+		cout << objects[i]->coEfficients[0] << " " << objects[i]->coEfficients[1] << " " << objects[i]->coEfficients[2] << " " << objects[i]->coEfficients[3] << endl;
+		cout << objects[i]->shine << endl;
+		cout << objects[i]->height << endl;
+		cout << objects[i]->width << endl;
+		cout << objects[i]->length << endl;
+		cout << endl;
+	}
 }
 
 int main(int argc, char **argv)
@@ -406,6 +569,9 @@ int main(int argc, char **argv)
 	glutKeyboardFunc(keyboardListener);
 	glutSpecialFunc(specialKeyListener);
 	glutMouseFunc(mouseListener);
+
+	loadData();
+	// printObjects();
 
 	glutMainLoop(); // The main loop of OpenGL
 
