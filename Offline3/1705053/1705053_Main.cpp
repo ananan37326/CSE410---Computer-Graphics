@@ -49,7 +49,7 @@ vector<SpotLight> spotLights;
 Vector3D origin(-floorWidth / 2, -floorWidth / 2, 0);
 
 // Initial value for the vectors
-Vector3D eye(100, 100, 20);
+Vector3D eye(100,100,20);
 Vector3D u(0, 0, 1);
 Vector3D r(-1 / sqrt(2), 1 / sqrt(2), 0);
 Vector3D l(-1 / sqrt(2), -1 / sqrt(2), 0);
@@ -484,6 +484,9 @@ void loadData()
 		cout << "Error opening file" << endl;
 		exit(1);
 	}
+	objects.clear();
+	pointLights.clear();
+	spotLights.clear();
 
 	fin >> recursionLevel;
 	fin >> imagePixel;
@@ -630,6 +633,17 @@ void printObjects()
 	}
 }
 
+void clearObjects()
+{
+	for (int i = 0; i < objects.size(); i++)
+	{
+		delete objects[i];
+	}
+	objects.clear();
+	pointLights.clear();
+	spotLights.clear();
+}
+
 int main(int argc, char **argv)
 {
 	glutInit(&argc, argv);
@@ -654,6 +668,8 @@ int main(int argc, char **argv)
 	// printObjects();
 
 	glutMainLoop(); // The main loop of OpenGL
+
+	clearObjects();
 
 	return 0;
 }

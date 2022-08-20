@@ -211,9 +211,7 @@ public:
         this->dir.normalize();
     }
 
-    ~Ray()
-    {
-    }
+
 };
 
 class Object
